@@ -1,0 +1,65 @@
+{
+  "name": "@emission-factors/mcp",
+  "version": "1.0.0",
+  "description": "Keyless MCP server for US electricity data by ZIP code: EPA eGRID emission factors, EIA retail rates, hourly grid carbon intensity, EPA CAMD plant emissions, and utility tariffs. For Claude, Cursor, Cline and other MCP clients.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "emission-factors-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "claude",
+    "claude-desktop",
+    "cursor",
+    "cline",
+    "emission-factors",
+    "egrid",
+    "epa",
+    "eia",
+    "carbon",
+    "carbon-accounting",
+    "scope-2",
+    "ghg",
+    "ghg-protocol",
+    "grid-carbon-intensity",
+    "electricity",
+    "sustainability",
+    "esg",
+    "climate",
+    "zip-code"
+  ],
+  "author": "emission-factors.com",
+  "license": "MIT",
+  "homepage": "https://emission-factors.com/mcp-setup",
+  "bugs": {
+    "url": "https://github.com/rozetyp/emission-factors-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rozetyp/emission-factors-mcp.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
