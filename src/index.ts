@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -103,7 +103,7 @@ const TOOLS = [
   },
   {
     "name": "lookup_batch",
-    "description": "Look up emission factors for multiple ZIP codes in a single call. More efficient than calling lookup_emission_factor in a loop. Maximum 100 ZIPs per request.",
+    "description": "Look up emission factors for up to 100 ZIP codes in one call (split longer lists). Returns one compact row per ZIP - subregion, CO2e kg/kWh (location-based), residual mix (market-based), carbon-free %, utility - unless full is true, which returns every field (about 2 KB per ZIP).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -115,6 +115,10 @@ const TOOLS = [
           },
           "description": "Array of 5-digit US ZIP codes",
           "maxItems": 100
+        },
+        "full": {
+          "type": "boolean",
+          "description": "Return complete candidate records (all pollutants, generation mix) instead of compact rows. Default false."
         }
       },
       "required": [
@@ -292,7 +296,7 @@ const TOOLS = [
   },
   {
     "name": "compare_sites",
-    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, state retail $/kWh for the sector, and the cleanest daily window from the hourly grid profile. With annual_kwh, also annual tCO2e and annual cost. Returns ranks by carbon, cost and combined.",
+    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, $/kWh for the sector (the ZIP's utility average where one full-service utility serves it, else the state average; all EIA-861 2023, see rate_basis), and the cleanest daily window from the 7-day hourly profile of its balancing authority. With annual_kwh, also annual tCO2e and cost. Returns competition ranks by carbon, cost and combined, gap percentages, and best_* = null with *_tied lists when sites tie.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -436,7 +440,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const zips = Array.isArray(a.zips) ? a.zips.map(String) : [];
         if (zips.length === 0) throw new McpError(ErrorCode.InvalidParams, 'zips must be a non-empty array');
         if (zips.length > 100) throw new McpError(ErrorCode.InvalidParams, 'zips array exceeds 100 items');
-        result = await api('/api/lookup/batch', { method: 'POST', body: JSON.stringify({ zips }) });
+        result = await api('/api/lookup/batch', { method: 'POST', body: JSON.stringify({ zips, compact: a.full !== true }) });
         break;
       }
       case 'calculate_emissions': {
@@ -513,7 +517,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
   } catch (err) {
     if (err instanceof McpError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
