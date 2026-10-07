@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -41,14 +41,14 @@ async function api(path: string, init: RequestInit = {}): Promise<unknown> {
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
 
   if (!res.ok) {
-    const detail = typeof body === 'object' && body !== null && 'error' in body
-      ? String((body as { error: unknown }).error)
-      : text || res.statusText;
+    const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+    const detail = [b.error, b.message, b.notes].filter(Boolean).map(String).join(': ') || text || res.statusText;
     if (res.status === 429) {
       throw new McpError(ErrorCode.InvalidRequest,
         'Rate limit exceeded (2,000 requests/hour per IP). Wait a little and try again.');
     }
-    throw new McpError(ErrorCode.InternalError, `API ${res.status}: ${detail}`);
+    // 4xx = the arguments were wrong; 5xx = an upstream data source is down (retry).
+    throw new McpError(res.status < 500 ? ErrorCode.InvalidParams : ErrorCode.InternalError, `API ${res.status}: ${detail}`);
   }
   return body;
 }
@@ -63,8 +63,16 @@ const TOOLS = [
       "properties": {
         "zip": {
           "type": "string",
-          "description": "5-digit US ZIP code (e.g. \"94105\")",
-          "pattern": "^\\d{5}$"
+          "description": "5-digit US ZIP code (e.g. \"94105\"); ZIP+4 accepted",
+          "pattern": "^\\d{5}(-?\\d{4})?$"
+        },
+        "year": {
+          "type": "string",
+          "enum": [
+            "2023",
+            "2024"
+          ],
+          "description": "eGRID edition: 2023 (default, official EPA) or 2024 (preliminary, Cornerstone Data, not an official EPA release)"
         }
       },
       "required": [
@@ -133,6 +141,14 @@ const TOOLS = [
           "type": "number",
           "description": "Optional: kWh covered by contractual instruments (RECs, PPAs, green tariff). Counted at zero in the market-based result. Default 0.",
           "minimum": 0
+        },
+        "year": {
+          "type": "string",
+          "enum": [
+            "2023",
+            "2024"
+          ],
+          "description": "eGRID edition (default 2023). Market-based needs 2023."
         }
       },
       "required": [
@@ -161,19 +177,26 @@ const TOOLS = [
           "description": "Number of most recent hours to return (default 24, max 168 = 1 week).",
           "minimum": 1,
           "maximum": 168
+        },
+        "aggregate": {
+          "type": "string",
+          "enum": [
+            "hour_of_day"
+          ],
+          "description": "Optional: return the 24-hour average profile over the last ~7 days instead of the hourly series"
         }
       }
     }
   },
   {
     "name": "plant_emissions",
-    "description": "Get hourly unit-level emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or state. Covers ~1,300 fossil units >25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). Data has ~21 day lag to ensure CAMD has published. Use for plant-specific carbon accounting, state-level fossil emissions aggregation, and \"dirtiest plants in [state]\" queries. Paywall-free alternative to S&P Global Market Intelligence ($30k+/yr).",
+    "description": "Get hourly unit-level emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or state. Covers ~1,300 fossil units >25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). CAMD publishes by quarter, so the default window is the last 7 days of the latest published quarter (latest_published_date in the response); later dates are not available yet. Default output is a per-facility summary from daily data; format=hourly returns unit-hour records for small windows. Use for plant-specific carbon accounting, state-level fossil emissions and \"dirtiest plants in [state]\" queries.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "facility_id": {
           "type": "integer",
-          "description": "EPA CAMD facility ID (e.g. 3 for Barry, AL). Look up IDs via the CAMD facilities endpoint."
+          "description": "EPA CAMD/ORIS facility code (e.g. 3 for Barry, AL). Find codes in the summary_by_facility of a state query, or at https://campd.epa.gov/."
         },
         "state": {
           "type": "string",
@@ -208,7 +231,7 @@ const TOOLS = [
   },
   {
     "name": "utility_tariff",
-    "description": "Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). Covers ~85% of US utilities. Upgrade from /api/rate (state average). For example, California state avg is $0.30/kWh but actual tariffs range from $0.21 (CleanPowerSF) to $0.52 (PG&E peak TOU). Does not cover Texas retail electric providers outside the old TDU territory (deregulated market).",
+    "description": "Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). Covers ~85% of US utilities. With a ZIP, matches the ZIP's utility by EIA ID. Returns currently-effective tariffs; when URDB has none flagged as default (common for Commercial/Industrial) it returns the most recent ones and says so in warnings, including when the newest available tariff has expired. Does not cover Texas retail electric providers (deregulated market) - use electricity_rate there.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -233,7 +256,7 @@ const TOOLS = [
             "Industrial",
             "Lighting"
           ],
-          "description": "Default \"Residential\""
+          "description": "Default \"Residential\" (case-insensitive)"
         },
         "limit": {
           "type": "integer",
@@ -330,7 +353,7 @@ const TOOLS = [
   },
   {
     "name": "calculate_fuel_emissions",
-    "description": "Calculate Scope 1 stationary-combustion emissions (CO2, CH4, N2O and CO2e) for fuels burned on site, using the EPA GHG Emission Factors Hub (2025). Pass one or more items with fuel, quantity and unit, e.g. natural gas in therms/ccf/mcf/scf, propane/diesel/heating oil in gallons, coal in short tons. Biomass CO2 is reported separately (biogenic). Returns per-item and total CO2e. Pair with calculate_emissions for a facility's electricity (Scope 2).",
+    "description": "Calculate Scope 1 stationary-combustion emissions (CO2, CH4, N2O and CO2e) for fuels burned on site, using the EPA GHG Emission Factors Hub (2025). Pass one or more items with fuel, quantity and unit, e.g. natural gas in therms/ccf/mcf/scf, propane/diesel/heating oil in gallons, coal in short tons. Biomass CO2 is reported separately (biogenic). Stationary sources only: for vehicle fuel the CO2 per gallon is the same, but CH4/N2O factors differ and are not included. Returns per-item and total CO2e. Pair with calculate_emissions for a facility's electricity (Scope 2).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -351,12 +374,13 @@ const TOOLS = [
               },
               "unit": {
                 "type": "string",
-                "description": "mmBtu, therm, Dth, scf, ccf, mcf, gallon, liter, barrel, short_ton, lb, tonne. Defaults to the fuel's native unit."
+                "description": "Required: mmBtu, therm, Dth, scf, ccf, mcf, gallon, liter, barrel, short_ton, lb, tonne"
               }
             },
             "required": [
               "fuel",
-              "quantity"
+              "quantity",
+              "unit"
             ]
           }
         }
@@ -376,9 +400,9 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 function zip5(v: unknown): string {
-  const zip = String(v ?? '').replace(/\D/g, '').slice(0, 5);
-  if (!/^\d{5}$/.test(zip)) throw new McpError(ErrorCode.InvalidParams, 'zip must be a 5-digit US ZIP code');
-  return zip;
+  const m = String(v ?? '').trim().match(/^(\d{5})(?:-?\d{4})?$/);
+  if (!m) throw new McpError(ErrorCode.InvalidParams, `zip must be a 5-digit US ZIP code (or ZIP+4), got "${v ?? ''}"`);
+  return m[1];
 }
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -389,7 +413,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let result: unknown;
     switch (name) {
       case 'lookup_emission_factor': {
-        result = await api(`/api/lookup?zip=${zip5(a.zip)}`);
+        const yq = a.year != null ? `&year=${encodeURIComponent(String(a.year))}` : '';
+        result = await api(`/api/lookup?zip=${zip5(a.zip)}${yq}`);
         break;
       }
       case 'lookup_by_coordinates': {
@@ -413,7 +438,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const kwh = Number(a.kwh);
         if (!Number.isFinite(kwh) || kwh < 0) throw new McpError(ErrorCode.InvalidParams, 'kwh must be a non-negative number');
         const renewable_kwh = a.renewable_kwh == null ? undefined : Number(a.renewable_kwh);
-        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh, renewable_kwh }) });
+        const year = a.year == null ? undefined : String(a.year);
+        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh, renewable_kwh, year }) });
         break;
       }
       case 'hourly_intensity': {
@@ -421,7 +447,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (a.zip) qs.set('zip', zip5(a.zip));
         else if (a.ba) qs.set('ba', String(a.ba).toUpperCase());
         else throw new McpError(ErrorCode.InvalidParams, 'provide either zip or ba');
-        if (a.hours != null) qs.set('hours', String(Math.min(168, Math.max(1, Number(a.hours)))));
+        if (a.hours != null) qs.set('hours', String(a.hours));
+        if (a.aggregate) qs.set('aggregate', String(a.aggregate));
         result = await api(`/api/intensity?${qs}`);
         break;
       }
@@ -430,7 +457,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (a.facility_id != null) qs.set('facility_id', String(Number(a.facility_id)));
         else if (a.state) qs.set('state', String(a.state).toUpperCase());
         else if (!a.begin) throw new McpError(ErrorCode.InvalidParams, 'provide facility_id, state, or begin+end');
-        if (a.days != null) qs.set('days', String(Math.min(90, Math.max(1, Number(a.days)))));
+        if (a.days != null) qs.set('days', String(a.days));
         if (a.begin) qs.set('begin', String(a.begin));
         if (a.end) qs.set('end', String(a.end));
         if (a.format) qs.set('format', String(a.format));
@@ -443,7 +470,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (a.utility) qs.set('utility', String(a.utility));
         if (a.eiaid != null) qs.set('eiaid', String(Number(a.eiaid)));
         if (a.sector) qs.set('sector', String(a.sector));
-        if (a.limit != null) qs.set('limit', String(Math.min(20, Math.max(1, Number(a.limit)))));
+        if (a.limit != null) qs.set('limit', String(a.limit));
         if (!qs.has('zip') && !qs.has('utility') && !qs.has('eiaid')) {
           throw new McpError(ErrorCode.InvalidParams, 'provide zip, utility, or eiaid');
         }

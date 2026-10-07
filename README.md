@@ -41,10 +41,17 @@ There are two ways to run this. Most people want **Option A**.
 
 ### Option A - Remote server (recommended, zero install)
 
-Point your client at the hosted MCP endpoint. Nothing to install, always up to date.
+Nothing to install, always up to date. The hosted endpoint is `https://emission-factors.com/mcp` (Streamable HTTP, no key).
 
-**Claude Desktop** - edit `claude_desktop_config.json`
-(`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows), then restart Claude:
+**Claude (web, desktop app, mobile)** - [**Add to Claude**](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Emission%20Factors&connectorUrl=https%3A%2F%2Femission-factors.com%2Fmcp). The link opens Claude's custom-connector dialog with the name and URL filled in; select **Add**, then **Connect**. By hand: Customize -> Connectors -> Add custom connector, URL `https://emission-factors.com/mcp`, OAuth fields empty.
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http emission-factors https://emission-factors.com/mcp
+```
+
+**Cursor** - add to `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -56,9 +63,9 @@ Point your client at the hosted MCP endpoint. Nothing to install, always up to d
 }
 ```
 
-**Cursor** - Settings -> MCP -> Add new MCP server, using the same URL.
-
 **Cline / Continue / Zed / other clients** - add a remote (Streamable HTTP) MCP server with URL `https://emission-factors.com/mcp`. No key needed.
+
+> Claude Desktop's `claude_desktop_config.json` only starts local (stdio) servers - a `"url"` entry there does nothing. Use the connector link above, or Option B.
 
 ### Option B - Local stdio server (this package)
 
