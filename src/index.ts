@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -183,7 +183,7 @@ const TOOLS = [
           "enum": [
             "hour_of_day"
           ],
-          "description": "Optional: return the 24-hour average profile over the last ~7 days instead of the hourly series"
+          "description": "Optional: return the 24-hour average profile over the last 7 days (168 hours) instead of the hourly series"
         }
       }
     }
@@ -225,6 +225,12 @@ const TOOLS = [
             "hourly"
           ],
           "description": "\"summary\" (default) aggregates by facility; \"hourly\" returns raw records."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Summary only: return the top N facilities by CO2 (default 25); facilities_total gives the full count."
         }
       }
     }
@@ -329,7 +335,7 @@ const TOOLS = [
   },
   {
     "name": "cleanest_hours",
-    "description": "Find the cleanest (lowest grid carbon) contiguous window of N hours in the day to run a flexible load (batch jobs, EV charging, pumping, HVAC pre-cooling) at a US ZIP code or balancing authority. Based on the hour-of-day pattern of the last ~7 days of EIA-930 data, in local time. Returns the cleanest and dirtiest windows, % saved vs the daily average, and all hours ranked. A scheduling guide from recent history, not a forecast.",
+    "description": "Find the cleanest (lowest grid carbon) contiguous window of N hours in the day to run a flexible load (batch jobs, EV charging, pumping, HVAC pre-cooling) at a US ZIP code or balancing authority. Based on the hour-of-day pattern of the last 7 days (168 hours) of EIA-930 data, in local time. Returns the cleanest and dirtiest windows, % saved vs the daily average, and all hours ranked. A scheduling guide from recent history, not a forecast.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -461,6 +467,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (a.begin) qs.set('begin', String(a.begin));
         if (a.end) qs.set('end', String(a.end));
         if (a.format) qs.set('format', String(a.format));
+        if (a.limit != null) qs.set('limit', String(a.limit));
         result = await api(`/api/plant-emissions?${qs}`);
         break;
       }
