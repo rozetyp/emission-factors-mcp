@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.5.2';
+const VERSION = '1.5.3';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -163,7 +163,7 @@ const TOOLS = [
   },
   {
     "name": "hourly_intensity",
-    "description": "Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags approximately 24 hours (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. Useful for backtesting demand response, computing post-hoc time-weighted Scope 2 emissions, or analyzing grid carbon patterns. For live or forecast intensity, WattTime or Electricity Maps are better options.",
+    "description": "Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags approximately 24 hours (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. For timing and analysis (demand response, load shifting, grid patterns), not inventory reporting: it uses fixed per-fuel combustion factors on in-BA generation (no imports), so its values don't match eGRID's annual factors. For live or forecast intensity, WattTime or Electricity Maps are better options.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -426,6 +426,11 @@ function zip5(v: unknown): string {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const a = (args ?? {}) as Record<string, unknown>;
+  // Reject arguments the tool does not declare (e.g. unit: "MWh" on calculate_emissions), as the hosted server does.
+  const tool = TOOLS.find(t => t.name === name);
+  const allowed = Object.keys((tool?.inputSchema as { properties?: object } | undefined)?.properties ?? {});
+  const unknown = tool ? Object.keys(a).filter(k => !allowed.includes(k)) : [];
+  if (unknown.length) throw new McpError(ErrorCode.InvalidParams, `Unknown argument(s) for ${name}: ${unknown.join(", ")}. Allowed: ${allowed.join(", ")}`);
 
   try {
     let result: unknown;
@@ -454,11 +459,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case 'calculate_emissions': {
         const zip = zip5(a.zip);
-        const kwh = Number(a.kwh);
-        if (!Number.isFinite(kwh) || kwh < 0) throw new McpError(ErrorCode.InvalidParams, 'kwh must be a non-negative number');
-        const renewable_kwh = a.renewable_kwh == null ? undefined : Number(a.renewable_kwh);
+        // Pass kwh and renewable_kwh through unchanged so the API rejects "", "abc" and the like.
         const year = a.year == null ? undefined : String(a.year);
-        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh, renewable_kwh, year }) });
+        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh: a.kwh, renewable_kwh: a.renewable_kwh, year }) });
         break;
       }
       case 'hourly_intensity': {

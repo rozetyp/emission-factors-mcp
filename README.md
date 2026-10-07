@@ -27,9 +27,9 @@ Once connected, your agent can answer things like:
 
 ## Why use it
 
-- **Scope 2 carbon accounting** - GHG Protocol location-based emission factors for all 33,616 US ZIP codes (CDP, CSRD, California SB 253 inputs).
+- **Scope 2 carbon accounting** - GHG Protocol location-based emission factors for 33,600+ US ZIP codes (CDP, CSRD, California SB 253 inputs).
 - **Site selection** - compare candidate locations on both carbon intensity *and* electricity cost in one conversation.
-- **Time-weighted / demand-response analysis** - hourly grid carbon from EIA-930 for load-shifting and post-hoc Scope 2.
+- **Demand-response and load-shifting analysis** - hourly grid carbon from EIA-930 (fixed per-fuel factors on in-BA generation: for timing, not inventory reporting).
 - **Plant-level emissions** - EPA CAMD hourly data for ~1,300 fossil units, a paywall-free alternative to commercial datasets.
 - **Agents and automation** - a clean tool surface so an LLM can fetch authoritative government data instead of hallucinating factors.
 
