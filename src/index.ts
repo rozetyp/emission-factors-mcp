@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.4.2';
+const VERSION = '1.5.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -363,7 +363,7 @@ const TOOLS = [
   },
   {
     "name": "calculate_fuel_emissions",
-    "description": "Calculate Scope 1 stationary-combustion emissions (CO2, CH4, N2O and CO2e) for fuels burned on site, using the EPA GHG Emission Factors Hub (2025). Pass one or more items with fuel, quantity and unit, e.g. natural gas in therms/ccf/mcf/scf, propane/diesel/heating oil in gallons, coal in short tons. Biomass CO2 is reported separately (biogenic). Stationary sources only: for vehicle fuel the CO2 per gallon is the same, but CH4/N2O factors differ and are not included. Returns per-item and total CO2e. Pair with calculate_emissions for a facility's electricity (Scope 2).",
+    "description": "Calculate Scope 1 stationary-combustion emissions (CO2, CH4, N2O and CO2e) for fuels burned on site, using the GHG Emission Factors Hub 2026 (Cornerstone, successor to EPA's Hub; IPCC AR6 GWPs) by default, or EPA's 2025 edition (AR5) with edition=2025. Pass one or more items with fuel, quantity and unit, e.g. natural gas in therms/ccf/mcf/scf, propane/diesel/heating oil in gallons, coal in short tons. Biomass CO2 is reported separately (biogenic). Stationary sources only: for vehicle fuel the CO2 per gallon is the same, but CH4/N2O factors differ and are not included. Returns per-item and total CO2e. Pair with calculate_emissions for a facility's electricity (Scope 2).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -376,7 +376,7 @@ const TOOLS = [
             "properties": {
               "fuel": {
                 "type": "string",
-                "description": "Fuel id or alias: natural_gas, propane, diesel, heating_oil, gasoline, lpg, kerosene, jet_fuel, residual_fuel_oil_no_6, bituminous, wood, biodiesel... (63 EPA Hub fuels)"
+                "description": "Fuel id or alias: natural_gas, propane, diesel, heating_oil, gasoline, lpg, kerosene, jet_fuel, residual_fuel_oil_no_6, bituminous, wood, biodiesel... (63 Hub fuels)"
               },
               "quantity": {
                 "type": "number",
@@ -393,6 +393,14 @@ const TOOLS = [
               "unit"
             ]
           }
+        },
+        "edition": {
+          "type": "string",
+          "enum": [
+            "2026",
+            "2025"
+          ],
+          "description": "Hub edition: 2026 (default; Cornerstone, AR6 GWPs) or 2025 (EPA, AR5 GWPs). Fuel factors are the same; CO2e differs slightly."
         }
       },
       "required": [
@@ -512,7 +520,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'calculate_fuel_emissions': {
         const items = Array.isArray(a.items) ? a.items : (a.fuel ? [{ fuel: a.fuel, quantity: a.quantity, unit: a.unit }] : []);
         if (items.length === 0) throw new McpError(ErrorCode.InvalidParams, 'items must be a non-empty array of { fuel, quantity, unit }');
-        result = await api('/api/fuel-emissions', { method: 'POST', body: JSON.stringify({ items }) });
+        result = await api('/api/fuel-emissions', { method: 'POST', body: JSON.stringify({ items, ...(a.edition != null ? { edition: String(a.edition) } : {}) }) });
         break;
       }
       default:

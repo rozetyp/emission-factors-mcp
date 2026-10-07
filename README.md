@@ -135,7 +135,7 @@ All tools return JSON. See [full API docs](https://emission-factors.com/api-docs
 |------|--------|-------|
 | Grid emission factors | EPA eGRID2023 Rev2 (+2024 preliminary) | Annual, location-based, 27 subregions |
 | Residual mix (market-based Scope 2) | Green-e Residual Mix 2025 (2023 data) | Per eGRID subregion |
-| Fuel combustion factors (Scope 1) | EPA GHG Emission Factors Hub 2025 | 63 fuels, AR5 GWPs |
+| Fuel combustion factors (Scope 1) | GHG Emission Factors Hub 2026 (Cornerstone, successor to EPA's Hub); EPA 2025 via `edition` | 63 fuels, AR6 GWPs (AR5 for 2025) |
 | Retail electricity rates | EIA Form 861 | State-level monthly average by sector |
 | Hourly grid carbon intensity | EIA-930 | Derived from hourly fuel mix, ~24h lag |
 | Plant-level emissions | EPA CAMD | ~1,300 fossil units >25 MW, ~21 day lag |
