@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.4.1';
+const VERSION = '1.4.2';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -441,7 +441,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (zips.length === 0) throw new McpError(ErrorCode.InvalidParams, 'zips must be a non-empty array');
         if (zips.length > 100) throw new McpError(ErrorCode.InvalidParams, 'zips array exceeds 100 items');
         const full = a.full === true || a.full === 'true';
-        result = await api('/api/lookup/batch', { method: 'POST', body: JSON.stringify({ zips, compact: !full }) });
+        result = await api('/api/lookup/batch', { method: 'POST', body: JSON.stringify({ zips, compact: !full, envelope: true }) });
         break;
       }
       case 'calculate_emissions': {
