@@ -1,6 +1,6 @@
 {
   "name": "@emission-factors/mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Keyless MCP server for US electricity data by ZIP code: EPA eGRID emission factors, EIA retail rates, hourly grid carbon intensity, EPA CAMD plant emissions, and utility tariffs. For Claude, Cursor, Cline and other MCP clients.",
   "type": "module",
   "main": "dist/index.js",
