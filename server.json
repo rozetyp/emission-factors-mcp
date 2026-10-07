@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.rozetyp/emission-factors",
+  "title": "Emission Factors",
+  "description": "Keyless US grid carbon + power cost by ZIP: eGRID Scope 2, Scope 1 fuels, site ranking, clean hours",
+  "repository": {
+    "url": "https://github.com/rozetyp/emission-factors-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://emission-factors.com/mcp-setup",
+  "version": "1.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://emission-factors.com/mcp"
+    }
+  ]
+}

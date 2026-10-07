@@ -21,6 +21,8 @@ Once connected, your agent can answer things like:
 - *"What hour of the day is cleanest to run a 500 kW batch job in California this week?"*
 - *"Enrich this list of 40 store ZIP codes with each site's emission factor and carbon-free percentage."*
 - *"Which are the dirtiest power plants in Texas by CO2 over the last week?"*
+- *"Rank Ashburn VA, Abilene TX and The Dalles OR for a 10 MW data center on carbon and power cost."*
+- *"Our plant burns 40,000 therms of gas and 3,000 gallons of diesel a year - what's our Scope 1?"*
 - *"What's the actual PG&E residential tariff for 94105, not the state average?"*
 
 ## Why use it
@@ -100,18 +102,21 @@ Optional environment variable: `EMISSION_FACTORS_API_BASE` (defaults to `https:/
 
 ## Tools
 
-Eight tools, all keyed by US ZIP code (or a direct code where noted). The remote server and this stdio build expose the same set.
+Eleven tools, keyed by US ZIP code (or a direct code where noted). The remote server and this stdio build expose the same set.
 
 | Tool | Purpose | Key inputs |
 |------|---------|------------|
 | `lookup_emission_factor` | EPA eGRID CO2e + full generation mix for a ZIP | `zip` |
 | `lookup_by_coordinates` | Same, resolved from lat/lon via Census geocoder | `lat`, `lon` |
 | `lookup_batch` | Emission factors for up to 100 ZIPs at once | `zips[]` |
-| `calculate_emissions` | Scope 2 kg/tonnes CO2e for a ZIP + annual kWh | `zip`, `kwh` |
+| `calculate_emissions` | Scope 2 CO2e for a ZIP + kWh, location-based and market-based (Green-e residual mix) | `zip`, `kwh`, `renewable_kwh` |
 | `hourly_intensity` | Hourly grid carbon intensity (EIA-930, ~24h lag) | `zip` or `ba`, `hours` |
 | `plant_emissions` | Hourly unit-level plant emissions (EPA CAMD) | `facility_id` or `state`, `days` |
 | `utility_tariff` | Utility-specific tariff, not state average (OpenEI URDB) | `zip`, `utility`, or `eiaid` |
 | `electricity_rate` | State-average retail rate by sector (EIA-861) | `zip` |
+| `compare_sites` | Rank 2-25 candidate sites on grid carbon, $/kWh and cleanest daily window | `zips[]`, `annual_kwh`, `sector` |
+| `cleanest_hours` | Cleanest N-hour window of the day to run a flexible load, in local time | `zip` or `ba`, `duration` |
+| `calculate_fuel_emissions` | Scope 1 CO2e for fuels burned on site (EPA GHG Emission Factors Hub) | `items[]`: `fuel`, `quantity`, `unit` |
 
 All tools return JSON. See [full API docs](https://emission-factors.com/api-docs) for exact response shapes.
 
@@ -122,6 +127,8 @@ All tools return JSON. See [full API docs](https://emission-factors.com/api-docs
 | Data | Source | Notes |
 |------|--------|-------|
 | Grid emission factors | EPA eGRID2023 Rev2 (+2024 preliminary) | Annual, location-based, 27 subregions |
+| Residual mix (market-based Scope 2) | Green-e Residual Mix 2025 (2023 data) | Per eGRID subregion |
+| Fuel combustion factors (Scope 1) | EPA GHG Emission Factors Hub 2025 | 63 fuels, AR5 GWPs |
 | Retail electricity rates | EIA Form 861 | State-level monthly average by sector |
 | Hourly grid carbon intensity | EIA-930 | Derived from hourly fuel mix, ~24h lag |
 | Plant-level emissions | EPA CAMD | ~1,300 fossil units >25 MW, ~21 day lag |

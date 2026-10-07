@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -53,118 +53,319 @@ async function api(path: string, init: RequestInit = {}): Promise<unknown> {
   return body;
 }
 
+// Generated from the hosted server (POST /mcp tools/list) so both transports stay identical.
 const TOOLS = [
   {
-    name: 'lookup_emission_factor',
-    description:
-      'Look up EPA eGRID electricity emission factors for a US ZIP code. Returns CO2e (kg/kWh and lb/MWh), CO2, CH4, N2O, NOx, SO2, non-baseload rate, carbon-free %, generation mix (coal/gas/nuclear/hydro/wind/solar etc.), eGRID subregion code, and the data year. Use this for Scope 2 location-based emissions accounting.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zip: { type: 'string', description: '5-digit US ZIP code (e.g. "94105")', pattern: '^\\d{5}$' },
+    "name": "lookup_emission_factor",
+    "description": "Look up EPA eGRID electricity emission factors for a US ZIP code. Returns CO2e (kg/kWh and lb/MWh), CO2, CH4, N2O, NOx, SO2, non-baseload rate, carbon-free %, generation mix (coal/gas/nuclear/hydro/wind/solar etc.), eGRID subregion code, the data year, and the Green-e residual mix rate (the market-based Scope 2 factor). Use this for Scope 2 location-based and market-based emissions accounting.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code (e.g. \"94105\")",
+          "pattern": "^\\d{5}$"
+        }
       },
-      required: ['zip'],
-    },
+      "required": [
+        "zip"
+      ]
+    }
   },
   {
-    name: 'lookup_by_coordinates',
-    description:
-      'Look up emission factors by latitude/longitude. Uses US Census Geocoder to resolve to ZIP first, then returns the same data as lookup_emission_factor. Useful when you have a facility address or lat/lon but no ZIP.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        lat: { type: 'number', description: 'Latitude (decimal degrees)' },
-        lon: { type: 'number', description: 'Longitude (decimal degrees)' },
-      },
-      required: ['lat', 'lon'],
-    },
-  },
-  {
-    name: 'lookup_batch',
-    description:
-      'Look up emission factors for multiple ZIP codes in a single call. More efficient than calling lookup_emission_factor in a loop. Maximum 100 ZIPs per request.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zips: {
-          type: 'array',
-          items: { type: 'string', pattern: '^\\d{5}$' },
-          description: 'Array of 5-digit US ZIP codes',
-          maxItems: 100,
+    "name": "lookup_by_coordinates",
+    "description": "Look up emission factors by latitude/longitude. Uses US Census Geocoder to resolve to ZIP first, then returns the same data as lookup_emission_factor. Useful when you have a facility address or lat/lon but no ZIP.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number",
+          "description": "Latitude (decimal degrees)"
         },
+        "lon": {
+          "type": "number",
+          "description": "Longitude (decimal degrees)"
+        }
       },
-      required: ['zips'],
-    },
+      "required": [
+        "lat",
+        "lon"
+      ]
+    }
   },
   {
-    name: 'calculate_emissions',
-    description:
-      'Calculate Scope 2 location-based CO2e emissions for a single facility given its ZIP and annual kWh consumption. Returns kg and tonnes CO2e along with the underlying emission factor and subregion. GHG Protocol Scope 2 compliant.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zip: { type: 'string', description: '5-digit US ZIP code' },
-        kwh: { type: 'number', description: 'Annual electricity consumption in kWh', minimum: 0 },
+    "name": "lookup_batch",
+    "description": "Look up emission factors for multiple ZIP codes in a single call. More efficient than calling lookup_emission_factor in a loop. Maximum 100 ZIPs per request.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d{5}$"
+          },
+          "description": "Array of 5-digit US ZIP codes",
+          "maxItems": 100
+        }
       },
-      required: ['zip', 'kwh'],
-    },
+      "required": [
+        "zips"
+      ]
+    }
   },
   {
-    name: 'hourly_intensity',
-    description:
-      'Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags approximately 24 hours (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. Useful for backtesting demand response, computing post-hoc time-weighted Scope 2 emissions, or analyzing grid carbon patterns. For live or forecast intensity, WattTime or Electricity Maps are better options.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zip: { type: 'string', description: '5-digit US ZIP code (or use ba parameter)', pattern: '^\\d{5}$' },
-        ba: { type: 'string', description: 'Balancing authority code directly (e.g. CISO, ERCO, PJM, MISO, NYIS). Use this OR zip.' },
-        hours: { type: 'integer', description: 'Number of most recent hours to return (default 24, max 168 = 1 week).', minimum: 1, maximum: 168 },
+    "name": "calculate_emissions",
+    "description": "Calculate Scope 2 CO2e for a facility from its ZIP and kWh, using both GHG Protocol methods: location-based (eGRID subregion rate) and market-based (Green-e residual mix applied to kWh not covered by RECs, PPAs or green tariffs). Returns kg CO2e for each method with the factors used.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code"
+        },
+        "kwh": {
+          "type": "number",
+          "description": "Electricity consumption in kWh",
+          "minimum": 0
+        },
+        "renewable_kwh": {
+          "type": "number",
+          "description": "Optional: kWh covered by contractual instruments (RECs, PPAs, green tariff). Counted at zero in the market-based result. Default 0.",
+          "minimum": 0
+        }
       },
-    },
+      "required": [
+        "zip",
+        "kwh"
+      ]
+    }
   },
   {
-    name: 'plant_emissions',
-    description:
-      'Get hourly unit-level emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or state. Covers ~1,300 fossil units >25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). Data has ~21 day lag to ensure CAMD has published. Use for plant-specific carbon accounting, state-level fossil emissions aggregation, and "dirtiest plants in [state]" queries. Paywall-free alternative to S&P Global Market Intelligence ($30k+/yr).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        facility_id: { type: 'integer', description: 'EPA CAMD facility ID (e.g. 3 for Barry, AL). Look up IDs via the CAMD facilities endpoint.' },
-        state: { type: 'string', description: '2-letter US state code for state-wide aggregate (e.g. TX, CA, PA).' },
-        days: { type: 'integer', description: 'Number of most recent days to include (1-90, default 7).', minimum: 1, maximum: 90 },
-        begin: { type: 'string', description: 'Custom begin date YYYY-MM-DD (optional, overrides days).', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        end: { type: 'string', description: 'Custom end date YYYY-MM-DD (optional, overrides days).', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        format: { type: 'string', enum: ['summary', 'hourly'], description: '"summary" (default) aggregates by facility; "hourly" returns raw records.' },
-      },
-    },
+    "name": "hourly_intensity",
+    "description": "Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags approximately 24 hours (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. Useful for backtesting demand response, computing post-hoc time-weighted Scope 2 emissions, or analyzing grid carbon patterns. For live or forecast intensity, WattTime or Electricity Maps are better options.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code (or use ba parameter)",
+          "pattern": "^\\d{5}$"
+        },
+        "ba": {
+          "type": "string",
+          "description": "Balancing authority code directly (e.g. CISO, ERCO, PJM, MISO, NYIS). Use this OR zip."
+        },
+        "hours": {
+          "type": "integer",
+          "description": "Number of most recent hours to return (default 24, max 168 = 1 week).",
+          "minimum": 1,
+          "maximum": 168
+        }
+      }
+    }
   },
   {
-    name: 'utility_tariff',
-    description:
-      'Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). Covers ~85% of US utilities. Upgrade from electricity_rate (state average). For example, California state avg is $0.30/kWh but actual tariffs range from $0.21 (CleanPowerSF) to $0.52 (PG&E peak TOU). Does not cover Texas retail electric providers outside the old TDU territory (deregulated market).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zip: { type: 'string', description: '5-digit US ZIP code', pattern: '^\\d{5}$' },
-        utility: { type: 'string', description: 'Utility name (e.g. "Pacific Gas & Electric Co", "Consolidated Edison Co-NY Inc")' },
-        eiaid: { type: 'integer', description: 'EIA utility ID (joins with EIA Form 861)' },
-        sector: { type: 'string', enum: ['Residential', 'Commercial', 'Industrial', 'Lighting'], description: 'Default "Residential"' },
-        limit: { type: 'integer', description: 'Max tariffs to return (1-20, default 5)', minimum: 1, maximum: 20 },
-      },
-    },
+    "name": "plant_emissions",
+    "description": "Get hourly unit-level emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or state. Covers ~1,300 fossil units >25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). Data has ~21 day lag to ensure CAMD has published. Use for plant-specific carbon accounting, state-level fossil emissions aggregation, and \"dirtiest plants in [state]\" queries. Paywall-free alternative to S&P Global Market Intelligence ($30k+/yr).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "facility_id": {
+          "type": "integer",
+          "description": "EPA CAMD facility ID (e.g. 3 for Barry, AL). Look up IDs via the CAMD facilities endpoint."
+        },
+        "state": {
+          "type": "string",
+          "description": "2-letter US state code for state-wide aggregate (e.g. TX, CA, PA)."
+        },
+        "days": {
+          "type": "integer",
+          "description": "Number of most recent days to include (1-90, default 7).",
+          "minimum": 1,
+          "maximum": 90
+        },
+        "begin": {
+          "type": "string",
+          "description": "Custom begin date YYYY-MM-DD (optional, overrides days).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "end": {
+          "type": "string",
+          "description": "Custom end date YYYY-MM-DD (optional, overrides days).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "hourly"
+          ],
+          "description": "\"summary\" (default) aggregates by facility; \"hourly\" returns raw records."
+        }
+      }
+    }
   },
   {
-    name: 'electricity_rate',
-    description:
-      'Get the latest monthly average retail electricity rate ($/kWh and cents/kWh) for any US ZIP code, broken out by sector (residential, commercial, industrial, etc.). Data is state-level from EIA Form 861 - a ballpark, not utility- or ZIP-specific tariffs. Pairs with emission factors to estimate carbon cost in $/tCO2e.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        zip: { type: 'string', description: '5-digit US ZIP code', pattern: '^\\d{5}$' },
-      },
-      required: ['zip'],
-    },
+    "name": "utility_tariff",
+    "description": "Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). Covers ~85% of US utilities. Upgrade from /api/rate (state average). For example, California state avg is $0.30/kWh but actual tariffs range from $0.21 (CleanPowerSF) to $0.52 (PG&E peak TOU). Does not cover Texas retail electric providers outside the old TDU territory (deregulated market).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code",
+          "pattern": "^\\d{5}$"
+        },
+        "utility": {
+          "type": "string",
+          "description": "Utility name (e.g. \"Pacific Gas & Electric Co\", \"Consolidated Edison Co-NY Inc\")"
+        },
+        "eiaid": {
+          "type": "integer",
+          "description": "EIA utility ID (joins with EIA Form 861)"
+        },
+        "sector": {
+          "type": "string",
+          "enum": [
+            "Residential",
+            "Commercial",
+            "Industrial",
+            "Lighting"
+          ],
+          "description": "Default \"Residential\""
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max tariffs to return (1-20, default 5)",
+          "minimum": 1,
+          "maximum": 20
+        }
+      }
+    }
   },
+  {
+    "name": "electricity_rate",
+    "description": "Get the latest monthly average retail electricity rate ($/kWh and cents/kWh) for any US ZIP code, broken out by sector (residential, commercial, industrial, etc.). Data is state-level from EIA Form 861 - a ballpark, not utility- or ZIP-specific tariffs. Pairs with emission factors to estimate carbon cost in $/tCO2e.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code",
+          "pattern": "^\\d{5}$"
+        }
+      },
+      "required": [
+        "zip"
+      ]
+    }
+  },
+  {
+    "name": "compare_sites",
+    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, state retail $/kWh for the sector, and the cleanest daily window from the hourly grid profile. With annual_kwh, also annual tCO2e and annual cost. Returns ranks by carbon, cost and combined.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d{5}$"
+          },
+          "minItems": 2,
+          "maxItems": 25,
+          "description": "Candidate 5-digit US ZIP codes"
+        },
+        "annual_kwh": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Optional annual consumption in kWh (e.g. 87,600,000 for a 10 MW constant load) to get annual tCO2e and cost per site"
+        },
+        "sector": {
+          "type": "string",
+          "enum": [
+            "COM",
+            "IND",
+            "RES",
+            "ALL"
+          ],
+          "description": "Retail rate sector. Default COM (commercial); use IND for industrial/data-center loads."
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Length of the cleanest daily window in hours (default 4)"
+        }
+      },
+      "required": [
+        "zips"
+      ]
+    }
+  },
+  {
+    "name": "cleanest_hours",
+    "description": "Find the cleanest (lowest grid carbon) contiguous window of N hours in the day to run a flexible load (batch jobs, EV charging, pumping, HVAC pre-cooling) at a US ZIP code or balancing authority. Based on the hour-of-day pattern of the last ~7 days of EIA-930 data, in local time. Returns the cleanest and dirtiest windows, % saved vs the daily average, and all hours ranked. A scheduling guide from recent history, not a forecast.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "5-digit US ZIP code (or use ba)",
+          "pattern": "^\\d{5}$"
+        },
+        "ba": {
+          "type": "string",
+          "description": "Balancing authority code (e.g. CISO, ERCO, PJM, MISO, NYIS). Use this OR zip."
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Window length in hours (default 4)"
+        }
+      }
+    }
+  },
+  {
+    "name": "calculate_fuel_emissions",
+    "description": "Calculate Scope 1 stationary-combustion emissions (CO2, CH4, N2O and CO2e) for fuels burned on site, using the EPA GHG Emission Factors Hub (2025). Pass one or more items with fuel, quantity and unit, e.g. natural gas in therms/ccf/mcf/scf, propane/diesel/heating oil in gallons, coal in short tons. Biomass CO2 is reported separately (biogenic). Returns per-item and total CO2e. Pair with calculate_emissions for a facility's electricity (Scope 2).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "properties": {
+              "fuel": {
+                "type": "string",
+                "description": "Fuel id or alias: natural_gas, propane, diesel, heating_oil, gasoline, lpg, kerosene, jet_fuel, residual_fuel_oil_no_6, bituminous, wood, biodiesel... (63 EPA Hub fuels)"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "description": "mmBtu, therm, Dth, scf, ccf, mcf, gallon, liter, barrel, short_ton, lb, tonne. Defaults to the fuel's native unit."
+              }
+            },
+            "required": [
+              "fuel",
+              "quantity"
+            ]
+          }
+        }
+      },
+      "required": [
+        "items"
+      ]
+    }
+  }
 ];
 
 const server = new Server(
@@ -211,7 +412,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const zip = zip5(a.zip);
         const kwh = Number(a.kwh);
         if (!Number.isFinite(kwh) || kwh < 0) throw new McpError(ErrorCode.InvalidParams, 'kwh must be a non-negative number');
-        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh }) });
+        const renewable_kwh = a.renewable_kwh == null ? undefined : Number(a.renewable_kwh);
+        result = await api('/api/calculate', { method: 'POST', body: JSON.stringify({ zip, kwh, renewable_kwh }) });
         break;
       }
       case 'hourly_intensity': {
@@ -250,6 +452,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case 'electricity_rate': {
         result = await api(`/api/rate?zip=${zip5(a.zip)}`);
+        break;
+      }
+      case 'compare_sites': {
+        const zips = Array.isArray(a.zips) ? a.zips.map(String) : [];
+        if (zips.length < 2) throw new McpError(ErrorCode.InvalidParams, 'zips must contain at least 2 ZIP codes');
+        const body = { zips, annual_kwh: a.annual_kwh, sector: a.sector, duration: a.duration };
+        result = await api('/api/compare', { method: 'POST', body: JSON.stringify(body) });
+        break;
+      }
+      case 'cleanest_hours': {
+        const qs = new URLSearchParams();
+        if (a.zip) qs.set('zip', zip5(a.zip));
+        else if (a.ba) qs.set('ba', String(a.ba).toUpperCase());
+        else throw new McpError(ErrorCode.InvalidParams, 'provide either zip or ba');
+        if (a.duration != null) qs.set('duration', String(a.duration));
+        result = await api(`/api/cleanest-hours?${qs}`);
+        break;
+      }
+      case 'calculate_fuel_emissions': {
+        const items = Array.isArray(a.items) ? a.items : (a.fuel ? [{ fuel: a.fuel, quantity: a.quantity, unit: a.unit }] : []);
+        if (items.length === 0) throw new McpError(ErrorCode.InvalidParams, 'items must be a non-empty array of { fuel, quantity, unit }');
+        result = await api('/api/fuel-emissions', { method: 'POST', body: JSON.stringify({ items }) });
         break;
       }
       default:
