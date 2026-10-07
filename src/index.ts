@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -471,7 +471,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const tool = TOOLS.find(t => t.name === name);
   const allowed = Object.keys((tool?.inputSchema as { properties?: object } | undefined)?.properties ?? {});
   const unknown = tool ? Object.keys(a).filter(k => !allowed.includes(k)) : [];
-  if (unknown.length) throw new McpError(ErrorCode.InvalidParams, `Unknown argument(s) for ${name}: ${unknown.join(", ")}. Allowed: ${allowed.join(", ")}`);
+  if (unknown.length) return { isError: true, content: [{ type: 'text', text: `Error calling ${name}: Unknown argument(s) for ${name}: ${unknown.join(", ")}. Allowed: ${allowed.join(", ")}` }] };
 
   try {
     let result: unknown;
