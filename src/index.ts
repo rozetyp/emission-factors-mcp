@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.5.0';
+const VERSION = '1.5.2';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -72,7 +72,7 @@ const TOOLS = [
             "2023",
             "2024"
           ],
-          "description": "eGRID edition: 2023 (default, official EPA) or 2024 (preliminary, Cornerstone Data, not an official EPA release)"
+          "description": "eGRID edition: 2023 (default, official EPA) or 2024 (EPA's public eGRID code run on 2024 data by Cornerstone; EPA has not published eGRID2024)"
         }
       },
       "required": [
