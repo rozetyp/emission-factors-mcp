@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -78,6 +78,9 @@ const TOOLS = [
       "required": [
         "zip"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -99,6 +102,9 @@ const TOOLS = [
         "lat",
         "lon"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -124,6 +130,9 @@ const TOOLS = [
       "required": [
         "zips"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -160,11 +169,14 @@ const TOOLS = [
         "zip",
         "kwh"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
     "name": "hourly_intensity",
-    "description": "Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags approximately 24 hours (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. For timing and analysis (demand response, load shifting, grid patterns), not inventory reporting: it uses fixed per-fuel combustion factors on in-BA generation (no imports), so its values don't match eGRID's annual factors. For live or forecast intensity, WattTime or Electricity Maps are better options.",
+    "description": "Get hourly grid carbon intensity (kg CO2e per kWh) for any US ZIP code, derived from EIA-930 hourly fuel-mix data. Data lags up to about a day (not real-time). Returns time series with per-hour fuel mix, total generation, and carbon intensity. For timing and analysis (demand response, load shifting, grid patterns), not inventory reporting: it uses fixed per-fuel combustion factors on in-BA generation (no imports), so its values don't match eGRID's annual factors. For live or forecast intensity, WattTime or Electricity Maps are better options.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -191,6 +203,9 @@ const TOOLS = [
           "description": "Optional: return the 24-hour average profile over the last 7 days (168 hours) instead of the hourly series. Buckets are UTC hours; for a local-time scheduling window use cleanest_hours."
         }
       }
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -238,6 +253,9 @@ const TOOLS = [
           "description": "Summary only: return the top N facilities by CO2 (default 25); facilities_total gives the full count."
         }
       }
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -279,6 +297,9 @@ const TOOLS = [
           "maximum": 20
         }
       }
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -296,6 +317,9 @@ const TOOLS = [
       "required": [
         "zip"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -342,6 +366,9 @@ const TOOLS = [
       "required": [
         "zips"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -366,6 +393,9 @@ const TOOLS = [
           "description": "Window length in hours (default 4)"
         }
       }
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   },
   {
@@ -413,6 +443,9 @@ const TOOLS = [
       "required": [
         "items"
       ]
+    },
+    "annotations": {
+      "readOnlyHint": true
     }
   }
 ];
@@ -425,7 +458,8 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 function zip5(v: unknown): string {
-  const m = String(v ?? '').trim().match(/^(\d{5})(?:-?\d{4})?$/);
+  // JSON numbers lose leading zeros (2108 for 02108): pad numbers, as the API does.
+  const m = (typeof v === 'number' ? String(v).padStart(5, '0') : String(v ?? '').trim()).match(/^(\d{5})(?:-?\d{4})?$/);
   if (!m) throw new McpError(ErrorCode.InvalidParams, `zip must be a 5-digit US ZIP code (or ZIP+4), got "${v ?? ''}"`);
   return m[1];
 }
@@ -538,6 +572,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     return { content: [{ type: 'text', text: JSON.stringify(result) }] };
   } catch (err) {
+    // Argument errors go back as an isError tool result, which clients show the model.
+    if (err instanceof McpError && err.code === ErrorCode.InvalidParams) {
+      return { isError: true, content: [{ type: 'text', text: `Error calling ${name}: ${err.message.replace(/^MCP error -?\d+: /, '')}` }] };
+    }
     if (err instanceof McpError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     throw new McpError(ErrorCode.InternalError, msg);
