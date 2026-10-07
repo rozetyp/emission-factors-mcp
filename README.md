@@ -27,10 +27,10 @@ Once connected, your agent can answer things like:
 
 ## Why use it
 
-- **Scope 2 carbon accounting** - GHG Protocol location-based emission factors for 33,600+ US ZIP codes (CDP, CSRD, California SB 253 inputs).
+- **Scope 2 carbon accounting** - GHG Protocol location- and market-based emission factors for 33,700+ US ZIP codes (CDP, CSRD, California SB 253 inputs).
 - **Site selection** - compare candidate locations on both carbon intensity *and* electricity cost in one conversation.
 - **Demand-response and load-shifting analysis** - hourly grid carbon from EIA-930 (fixed per-fuel factors on in-BA generation: for timing, not inventory reporting).
-- **Plant-level emissions** - EPA CAMD hourly data for ~1,300 fossil units, a paywall-free alternative to commercial datasets.
+- **Plant-level emissions** - EPA CAMD data for fossil units over 25 MW: per-facility summaries or unit-hour records, published quarterly.
 - **Agents and automation** - a clean tool surface so an LLM can fetch authoritative government data instead of hallucinating factors.
 
 ---
@@ -118,7 +118,7 @@ Eleven tools, keyed by US ZIP code (or a direct code where noted). The remote se
 | `lookup_batch` | Emission factors for up to 100 ZIPs at once | `zips[]` |
 | `calculate_emissions` | Scope 2 CO2e for a ZIP + kWh, location-based and market-based (Green-e residual mix) | `zip`, `kwh`, `renewable_kwh` |
 | `hourly_intensity` | Hourly grid carbon intensity (EIA-930, ~24h lag) | `zip` or `ba`, `hours` |
-| `plant_emissions` | Hourly unit-level plant emissions (EPA CAMD) | `facility_id` or `state`, `days` |
+| `plant_emissions` | Plant emissions (EPA CAMD): facility summaries or unit-hour records | `facility_id` or `state`, `days` |
 | `utility_tariff` | Utility-specific tariff, not state average (OpenEI URDB) | `zip`, `utility`, or `eiaid` |
 | `electricity_rate` | State-average retail rate by sector (EIA-861) | `zip` |
 | `compare_sites` | Rank 2-25 candidate sites on grid carbon, $/kWh and cleanest daily window | `zips[]`, `annual_kwh`, `sector` |
@@ -138,8 +138,8 @@ All tools return JSON. See [full API docs](https://emission-factors.com/api-docs
 | Fuel combustion factors (Scope 1) | GHG Emission Factors Hub 2026 (Cornerstone, successor to EPA's Hub); EPA 2025 via `edition` | 63 fuels, AR6 GWPs (AR5 for 2025) |
 | Retail electricity rates | EIA Form 861 | State-level monthly average by sector |
 | Hourly grid carbon intensity | EIA-930 | Derived from hourly fuel mix, ~24h lag |
-| Plant-level emissions | EPA CAMD | ~1,300 fossil units >25 MW, ~21 day lag |
-| Utility-specific tariffs | OpenEI URDB (NREL) | ~85% of US utilities |
+| Plant-level emissions | EPA CAMD | fossil units >25 MW, published quarterly (45+ days after quarter end) |
+| Utility-specific tariffs | OpenEI URDB (NREL) | ZIP matched to its utility by EIA ID |
 | ZIP / lat-lon resolution | US Census (ZCTA + Geocoder) | ZIP -> eGRID subregion mapping |
 
 ## Rate limits and auth

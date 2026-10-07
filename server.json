@@ -8,7 +8,7 @@
     "source": "github"
   },
   "websiteUrl": "https://emission-factors.com/mcp-setup",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "remotes": [
     {
       "type": "streamable-http",

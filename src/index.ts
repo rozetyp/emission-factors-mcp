@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.5.3';
+const VERSION = '1.6.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -57,7 +57,7 @@ async function api(path: string, init: RequestInit = {}): Promise<unknown> {
 const TOOLS = [
   {
     "name": "lookup_emission_factor",
-    "description": "Look up EPA eGRID electricity emission factors for a US ZIP code. Returns CO2e (kg/kWh and lb/MWh), CO2, CH4, N2O, NOx, SO2, non-baseload rate, carbon-free %, generation mix (coal/gas/nuclear/hydro/wind/solar etc.), eGRID subregion code, the data year, and the Green-e residual mix rate (the market-based Scope 2 factor). Use this for Scope 2 location-based and market-based emissions accounting.",
+    "description": "Look up EPA eGRID electricity emission factors for a US ZIP code. Returns CO2e (kg/kWh and lb/MWh), CO2, CH4, N2O, NOx, SO2, non-baseload rate, carbon-free %, generation mix (coal/gas/nuclear/hydro/wind/solar etc.), eGRID subregion code, the data year, and the Green-e residual mix rate (the market-based Scope 2 factor). For Scope 2 emissions from a kWh total, use calculate_emissions, which does the arithmetic for both methods.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -111,9 +111,9 @@ const TOOLS = [
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^\\d{5}$"
+            "pattern": "^\\d{5}(-?\\d{4})?$"
           },
-          "description": "Array of 5-digit US ZIP codes",
+          "description": "Array of US ZIP codes (5 digits or ZIP+4)",
           "maxItems": 100
         },
         "full": {
@@ -134,7 +134,8 @@ const TOOLS = [
       "properties": {
         "zip": {
           "type": "string",
-          "description": "5-digit US ZIP code"
+          "description": "5-digit US ZIP code (ZIP+4 accepted)",
+          "pattern": "^\\d{5}(-?\\d{4})?$"
         },
         "kwh": {
           "type": "number",
@@ -170,7 +171,7 @@ const TOOLS = [
         "zip": {
           "type": "string",
           "description": "5-digit US ZIP code (or use ba parameter)",
-          "pattern": "^\\d{5}$"
+          "pattern": "^\\d{5}(-?\\d{4})?$"
         },
         "ba": {
           "type": "string",
@@ -187,14 +188,14 @@ const TOOLS = [
           "enum": [
             "hour_of_day"
           ],
-          "description": "Optional: return the 24-hour average profile over the last 7 days (168 hours) instead of the hourly series"
+          "description": "Optional: return the 24-hour average profile over the last 7 days (168 hours) instead of the hourly series. Buckets are UTC hours; for a local-time scheduling window use cleanest_hours."
         }
       }
     }
   },
   {
     "name": "plant_emissions",
-    "description": "Get hourly unit-level emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or state. Covers ~1,300 fossil units >25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). CAMD publishes by quarter, so the default window is the last 7 days of the latest published quarter (latest_published_date in the response); later dates are not available yet. Default output is a per-facility summary from daily data; format=hourly returns unit-hour records for small windows. Use for plant-specific carbon accounting, state-level fossil emissions and \"dirtiest plants in [state]\" queries.",
+    "description": "Get emissions from EPA Clean Air Markets Division (CAMD) for a specific US power plant or a state: fossil units over 25 MW reporting to the Acid Rain Program and CSAPR. Per facility returns total CO2 (short tons), gross generation (MWh), heat input (mmBtu), NOx and SO2 (lb), primary fuel type, operating hours, and derived emissions rate (kg CO2/MWh). CAMD publishes by quarter, so the default window is the last 7 days of the latest published quarter (latest_published_date in the response); later dates are not available yet. Default output is a per-facility summary from daily data; format=hourly returns unit-hour records for small windows. Use for plant-specific carbon accounting, state-level fossil emissions and \"dirtiest plants in [state]\" queries.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -228,7 +229,7 @@ const TOOLS = [
             "summary",
             "hourly"
           ],
-          "description": "\"summary\" (default) aggregates by facility; \"hourly\" returns raw records."
+          "description": "\"summary\" (default) aggregates by facility; \"hourly\" returns raw CAMD unit-hour records, about 0.8 KB each (a 9-unit plant-day was 172 KB), so use it with facility_id and 1-2 days."
         },
         "limit": {
           "type": "integer",
@@ -241,14 +242,14 @@ const TOOLS = [
   },
   {
     "name": "utility_tariff",
-    "description": "Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). Covers ~85% of US utilities. With a ZIP, matches the ZIP's utility by EIA ID. Returns currently-effective tariffs; when URDB has none flagged as default (common for Commercial/Industrial) it returns the most recent ones and says so in warnings, including when the newest available tariff has expired. Does not cover Texas retail electric providers (deregulated market) - use electricity_rate there.",
+    "description": "Get the actual utility-specific electricity rate (not state average) for a US ZIP code or named utility. Returns the current default tariff with effective rate ($/kWh), fixed monthly charge, tier count, TOU indicator, and effective date. Data source: OpenEI URDB (NREL-hosted). With a ZIP, matches the ZIP's utility by EIA ID. Returns currently-effective tariffs; when URDB has none flagged as default (common for Commercial/Industrial) it returns the most recent ones and says so in warnings, including when the newest available tariff has expired. Does not cover Texas retail electric providers (deregulated market) - use electricity_rate there.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "zip": {
           "type": "string",
           "description": "5-digit US ZIP code",
-          "pattern": "^\\d{5}$"
+          "pattern": "^\\d{5}(-?\\d{4})?$"
         },
         "utility": {
           "type": "string",
@@ -264,9 +265,12 @@ const TOOLS = [
             "Residential",
             "Commercial",
             "Industrial",
-            "Lighting"
+            "Lighting",
+            "RES",
+            "COM",
+            "IND"
           ],
-          "description": "Default \"Residential\" (case-insensitive)"
+          "description": "Default \"Residential\" (case-insensitive; RES/COM/IND codes accepted)"
         },
         "limit": {
           "type": "integer",
@@ -279,14 +283,14 @@ const TOOLS = [
   },
   {
     "name": "electricity_rate",
-    "description": "Get the latest monthly average retail electricity rate ($/kWh and cents/kWh) for any US ZIP code, broken out by sector (residential, commercial, industrial, etc.). Data is state-level from EIA Form 861 - a ballpark, not utility- or ZIP-specific tariffs. Pairs with emission factors to estimate carbon cost in $/tCO2e.",
+    "description": "Get the latest monthly average retail electricity rate ($/kWh and cents/kWh) for any US ZIP code, broken out by sector (residential, commercial, industrial, etc.). Data is state-level from EIA Form 861 - a ballpark, not utility- or ZIP-specific tariffs (use utility_tariff for those).",
     "inputSchema": {
       "type": "object",
       "properties": {
         "zip": {
           "type": "string",
           "description": "5-digit US ZIP code",
-          "pattern": "^\\d{5}$"
+          "pattern": "^\\d{5}(-?\\d{4})?$"
         }
       },
       "required": [
@@ -296,7 +300,7 @@ const TOOLS = [
   },
   {
     "name": "compare_sites",
-    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, $/kWh for the sector (the ZIP's utility average where one full-service utility serves it, else the state average; all EIA-861 2023, see rate_basis), and the cleanest daily window from the 7-day hourly profile of its balancing authority. With annual_kwh, also annual tCO2e and cost. Returns competition ranks by carbon, cost and combined, gap percentages, and best_* = null with *_tied lists when sites tie.",
+    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, $/kWh for the sector (the average of the ZIP's primary full-service utility - full-service first, then public power, IOU, co-op, the same heuristic as lookup's utility.primary - unless a delivery-only utility serves the ZIP (retail choice), else the state average; all EIA-861 2023, see rate_basis), and the cleanest daily window from the 7-day hourly profile of its balancing authority. With annual_kwh, also annual tCO2e and cost. Returns competition ranks by carbon, cost and combined, gap percentages, and best_* = null with *_tied lists when sites tie.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -304,11 +308,11 @@ const TOOLS = [
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^\\d{5}$"
+            "pattern": "^\\d{5}(-?\\d{4})?$"
           },
           "minItems": 2,
           "maxItems": 25,
-          "description": "Candidate 5-digit US ZIP codes"
+          "description": "Candidate US ZIP codes (5 digits or ZIP+4)"
         },
         "annual_kwh": {
           "type": "number",
@@ -321,7 +325,10 @@ const TOOLS = [
             "COM",
             "IND",
             "RES",
-            "ALL"
+            "ALL",
+            "Commercial",
+            "Industrial",
+            "Residential"
           ],
           "description": "Retail rate sector. Default COM (commercial); use IND for industrial/data-center loads."
         },
@@ -346,7 +353,7 @@ const TOOLS = [
         "zip": {
           "type": "string",
           "description": "5-digit US ZIP code (or use ba)",
-          "pattern": "^\\d{5}$"
+          "pattern": "^\\d{5}(-?\\d{4})?$"
         },
         "ba": {
           "type": "string",
@@ -450,7 +457,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case 'lookup_batch': {
-        const zips = Array.isArray(a.zips) ? a.zips.map(String) : [];
+        const zips = Array.isArray(a.zips) ? a.zips : []; // the API pads JSON numbers and validates
         if (zips.length === 0) throw new McpError(ErrorCode.InvalidParams, 'zips must be a non-empty array');
         if (zips.length > 100) throw new McpError(ErrorCode.InvalidParams, 'zips array exceeds 100 items');
         const full = a.full === true || a.full === 'true';
@@ -478,7 +485,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const qs = new URLSearchParams();
         if (a.facility_id != null) qs.set('facility_id', String(Number(a.facility_id)));
         else if (a.state) qs.set('state', String(a.state).toUpperCase());
-        else if (!a.begin) throw new McpError(ErrorCode.InvalidParams, 'provide facility_id, state, or begin+end');
+        else throw new McpError(ErrorCode.InvalidParams, 'provide facility_id or state (optionally with days, or begin and end)');
         if (a.days != null) qs.set('days', String(a.days));
         if (a.begin) qs.set('begin', String(a.begin));
         if (a.end) qs.set('end', String(a.end));
@@ -505,7 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case 'compare_sites': {
-        const zips = Array.isArray(a.zips) ? a.zips.map(String) : [];
+        const zips = Array.isArray(a.zips) ? a.zips : []; // the API pads JSON numbers and validates
         if (zips.length < 2) throw new McpError(ErrorCode.InvalidParams, 'zips must contain at least 2 ZIP codes');
         const body = { zips, annual_kwh: a.annual_kwh, sector: a.sector, duration: a.duration };
         result = await api('/api/compare', { method: 'POST', body: JSON.stringify(body) });
