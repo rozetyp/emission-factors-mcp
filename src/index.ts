@@ -26,7 +26,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const VERSION = '1.7.1';
+const VERSION = '1.8.0';
 const API_BASE = process.env.EMISSION_FACTORS_API_BASE || 'https://emission-factors.com';
 
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -220,7 +220,7 @@ const TOOLS = [
         },
         "state": {
           "type": "string",
-          "description": "2-letter US state code for state-wide aggregate (e.g. TX, CA, PA)."
+          "description": "US state (2-letter code or full name, e.g. TX or Texas) for a state-wide aggregate."
         },
         "days": {
           "type": "integer",
@@ -324,7 +324,7 @@ const TOOLS = [
   },
   {
     "name": "compare_sites",
-    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, $/kWh for the sector (the average of the ZIP's primary full-service utility - full-service first, then public power, IOU, co-op, the same heuristic as lookup's utility.primary - unless a delivery-only utility serves the ZIP (retail choice), else the state average; all EIA-861 2023, see rate_basis), and the cleanest daily window from the 7-day hourly profile of its balancing authority. With annual_kwh, also annual tCO2e and cost. Returns competition ranks by carbon, cost and combined, gap percentages, and best_* = null with *_tied lists when sites tie.",
+    "description": "Compare and rank 2-25 candidate US sites (ZIP codes) for a facility, data center or EV/flexible load on grid carbon and electricity cost in one call. Per site: eGRID CO2e kg/kWh (location-based), Green-e residual mix (market-based), carbon-free %, $/kWh for the sector (the ZIP's utility average where exactly one full-service utility serves it, otherwise (several utilities, or retail choice) the state average; all EIA-861 2023, see rate_basis), and the cleanest daily window from the 7-day hourly profile of its balancing authority. With annual_kwh, also annual tCO2e and cost. Returns competition ranks by carbon, cost and combined, gap percentages, and best_* = null with *_tied lists when sites tie.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -373,7 +373,7 @@ const TOOLS = [
   },
   {
     "name": "cleanest_hours",
-    "description": "Find the cleanest (lowest grid carbon) contiguous window of N hours in the day to run a flexible load (batch jobs, EV charging, pumping, HVAC pre-cooling) at a US ZIP code or balancing authority. Based on the hour-of-day pattern of the last 7 days (168 hours) of EIA-930 data, in local time. Returns the cleanest and dirtiest windows, % saved vs the daily average, and all hours ranked. A scheduling guide from recent history, not a forecast.",
+    "description": "Find the cleanest (lowest grid carbon) contiguous window of N hours in the day to run a flexible load (batch jobs, EV charging, pumping, HVAC pre-cooling) at a US ZIP code or balancing authority. Based on the hour-of-day pattern of the last 7 days (168 hours) of EIA-930 data, in local time. Returns the cleanest and dirtiest windows, % saved vs the daily average, and all hours ranked; between limits the windows to given local hours (e.g. overnight). A scheduling guide from recent history, not a forecast.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -391,6 +391,11 @@ const TOOLS = [
           "minimum": 1,
           "maximum": 12,
           "description": "Window length in hours (default 4)"
+        },
+        "between": {
+          "type": "string",
+          "description": "Optional local hours the window must fall in, start-end, wrapping past midnight: e.g. \"20-06\" for an EV fleet parked overnight, \"9-17\" for working hours.",
+          "pattern": "^\\d{1,2}(:00)?-\\d{1,2}(:00)?$"
         }
       }
     },
@@ -458,8 +463,9 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 function zip5(v: unknown): string {
-  // JSON numbers lose leading zeros (2108 for 02108): pad numbers, as the API does.
-  const m = (typeof v === 'number' ? String(v).padStart(5, '0') : String(v ?? '').trim()).match(/^(\d{5})(?:-?\d{4})?$/);
+  // Numbers and spreadsheets lose leading zeros (2108 for 02108): pad, as the API does.
+  const s = typeof v === 'number' ? String(v) : String(v ?? '').trim();
+  const m = (/^\d{3,4}$/.test(s) ? s.padStart(5, '0') : s).match(/^(\d{5})(?:-?\d{4})?$/);
   if (!m) throw new McpError(ErrorCode.InvalidParams, `zip must be a 5-digit US ZIP code (or ZIP+4), got "${v ?? ''}"`);
   return m[1];
 }
@@ -558,6 +564,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         else if (a.ba) qs.set('ba', String(a.ba).toUpperCase());
         else throw new McpError(ErrorCode.InvalidParams, 'provide either zip or ba');
         if (a.duration != null) qs.set('duration', String(a.duration));
+        if (a.between != null) qs.set('between', String(a.between));
         result = await api(`/api/cleanest-hours?${qs}`);
         break;
       }
